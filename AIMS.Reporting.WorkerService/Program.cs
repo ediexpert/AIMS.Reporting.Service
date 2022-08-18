@@ -20,9 +20,10 @@ namespace AIMS.Reporting.WorkerService
             Host.CreateDefaultBuilder(args)
         .ConfigureServices((hostContext, services) =>
         {
-                    services.AddDbContext<AppDbContext>(options => options.UseMySql(hostContext.Configuration.GetConnectionString("DefaultConnection")));
-                    services.AddHostedService<Worker>();
-                });
+            string connString = hostContext.Configuration.GetConnectionString("DefaultConnection");
+            services.AddDbContext<AppDbContext>(options => options.UseMySql(connString));
+            services.AddHostedService<Worker>();
+        });
     }
 }
 

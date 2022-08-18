@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
+using System.Data.SqlClient;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,15 +22,18 @@ namespace AIMS.Reporting.WorkerService
         Event _event;
         DateTime _startDate;
         DateTime _endDate;
-
+        private SqlConnection sqlcon;
+        const string _aimsConnString = "Data Source=192.168.3.100;Initial Catalog=JSMSDB;User id=khadimeaala;Password=AMJJ$@120820!8;";
+        private Dictionary<string, int> _dbData;
 
         public Worker(ILogger<Worker> logger, IServiceProvider provider)
         {
             _logger = logger;
             _provider = provider;
             _nlogger = NLog.LogManager.GetCurrentClassLogger();
-        }
+            _dbData = new Dictionary<string, int>();
 
+        }
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             while (!stoppingToken.IsCancellationRequested)
@@ -38,6 +43,9 @@ namespace AIMS.Reporting.WorkerService
 
                 using var scope = _provider.CreateScope();
                 _dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+                sqlcon = new SqlConnection();
+                sqlcon.ConnectionString = "Data Source=192.168.3.100;Initial Catalog=JSMSDB;User id=khadimeaala;Password=AMJJ$@120820!8;";
 
                 _logger.LogInformation($"Records count = " + _dbContext.Hazris.Count());
 
@@ -66,17 +74,49 @@ namespace AIMS.Reporting.WorkerService
                 await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
             }
         }
-
         private AttendanceTanzeem GetAttendance(Days i)
         {
             SetDates(i);
-            throw new NotImplementedException();
+            AttendanceTanzeem at = new AttendanceTanzeem();
+            try
+            {
+                // require date in format 2022-08-15 00:00:00
+                string query = $"SELECT count (distinct j.barcode) total, m.tanzeem FROM dbo.members_local m, dbo.attendance_a j where j.barcode = m.barcode AND j.entrytime BETWEEN '{_startDate.ToString("yyyy-MM-dd HH:mm:ss")}' AND '{_endDate.ToString("yyyy-MM-dd HH:mm:ss")}' group by tanzeem ";
+                _logger.LogInformation($"Fetching data(Local members) from AIMS server....");
+                _logger.LogInformation(query);
+                Execute(query);
+                at.Ansar = Convert.ToInt32( _dbData.FirstOrDefault(x => x.Key == "A").Value);
+                at.Khuddam = Convert.ToInt32( _dbData.FirstOrDefault(x => x.Key == "K").Value);
+                at.Lajna = Convert.ToInt32( _dbData.FirstOrDefault(x => x.Key == "L").Value);
+                at.Itfal = Convert.ToInt32( _dbData.FirstOrDefault(x => x.Key == "T").Value);
+                at.Nasrat = Convert.ToInt32( _dbData.FirstOrDefault(x => x.Key == "N").Value);
+                at.Boys = Convert.ToInt32( _dbData.FirstOrDefault(x => x.Key == "B").Value);
+                at.Girls = Convert.ToInt32( _dbData.FirstOrDefault(x => x.Key == "G").Value);
 
+                // Visitor
 
+                query = query.Replace("dbo.members_local", "dbo.visitors");                
+                _logger.LogInformation($"Fetching data(Visitors) from AIMS server....");
+                _logger.LogInformation(query);
+                Execute(query);
+                at.Ansar += Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "A").Value);
+                at.Khuddam += Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "K").Value);
+                at.Lajna += Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "L").Value);
+                at.Itfal += Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "T").Value);
+                at.Nasrat += Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "N").Value);
+                at.Boys += Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "B").Value);
+                at.Girls += Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "G").Value);
 
-
+                return at;
+            }
+            catch (Exception exception)
+            {
+                _logger.LogError(exception.Message, exception);
+                _nlogger.Error(exception);
+                throw;
+            }
+            
         }
-
         private void SetDates(Days i)
         {            
 
@@ -99,6 +139,30 @@ namespace AIMS.Reporting.WorkerService
                     _endDate = _startDate.AddDays(2).AddSeconds(-1);
                     break;
             }
+        }
+        private void Execute(string queryString)
+        {
+            using (SqlConnection connection = new SqlConnection(
+                       _aimsConnString))
+            {
+                SqlCommand command = new SqlCommand(queryString, connection);
+                command.Connection.Open();
+                SqlDataReader reader = command.ExecuteReader();
+                // Call Read before accessing data.
+                _dbData?.Clear();
+                while (reader.Read())
+                {
+                    ReadSingleRow((IDataRecord)reader);
+                }
+
+                // Call Close when done reading.
+                reader.Close();
+            }
+        }
+        private void ReadSingleRow(IDataRecord dataRecord)
+        {
+            _dbData.Add(((string)dataRecord[1]).Trim(), (int)dataRecord[0]);
+            Console.WriteLine(String.Format("{0}, {1}", dataRecord[0], dataRecord[1]));
         }
     }
 }
