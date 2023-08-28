@@ -7,9 +7,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using AIMS.Reporting.WorkerService.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace AIMS.Reporting.WorkerService
 {
@@ -23,16 +25,16 @@ namespace AIMS.Reporting.WorkerService
         DateTime _startDate;
         DateTime _endDate;
         private SqlConnection sqlcon;
-        const string _aimsConnString = "Data Source=192.168.3.100;Initial Catalog=JSMSDB;User id=khadimeaala;Password=AMJJ$@120820!8;";
+        private string _aimsConnString;
         private Dictionary<string, int> _dbData;
-
-        public Worker(ILogger<Worker> logger, IServiceProvider provider)
+        private readonly IConfiguration _config;
+        public Worker(ILogger<Worker> logger, IServiceProvider provider, IConfiguration config)
         {
             _logger = logger;
             _provider = provider;
             _nlogger = NLog.LogManager.GetCurrentClassLogger();
             _dbData = new Dictionary<string, int>();
-
+            _config = config;
         }
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
@@ -41,11 +43,11 @@ namespace AIMS.Reporting.WorkerService
                 _logger.LogInformation("Worker Reporting service running at: {time}", DateTimeOffset.Now);
                 _nlogger.Info("Worker Reporting service running at: {time}", DateTimeOffset.Now);
 
-                using var scope = _provider.CreateScope();
+                using var scope = _provider.CreateScope();                
                 _dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
+                _aimsConnString = _config.GetConnectionString("AIMSConnection");
                 sqlcon = new SqlConnection();
-                sqlcon.ConnectionString = "Data Source=192.168.3.100;Initial Catalog=JSMSDB;User id=khadimeaala;Password=AMJJ$@120820!8;";
+                sqlcon.ConnectionString = _aimsConnString; //"Data Source=192.168.3.100;Initial Catalog=JSMSDB;User id=khadimeaala;Password=AMJJ$@120820!8;";
 
                 _logger.LogInformation($"Records count = " + _dbContext.Hazris.Count());
 

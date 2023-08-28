@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Worker">
 
   <PropertyGroup>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <TargetFramework>net6.0</TargetFramework>
     <UserSecretsId>dotnet-AIMS.Reporting.WorkerService-B19C53DF-0DF5-47C7-A073-09FA732E2581</UserSecretsId>
   </PropertyGroup>
 
