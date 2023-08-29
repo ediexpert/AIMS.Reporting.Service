@@ -31,4 +31,7 @@
   <ItemGroup>
     <Folder Include="Models\" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\AIMS.Dashboard.Data\AIMS.Dashboard.Data.csproj" />
+  </ItemGroup>
 </Project>

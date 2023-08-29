@@ -1,7 +1,6 @@
 ﻿using System;
-namespace AIMS.Reporting.WorkerService.Models
-{    
-
+namespace AIMS.Dashboards.Data
+{
     public class AttendanceTanzeem
     {
         public int Ansar { get; set; }
@@ -13,7 +12,8 @@ namespace AIMS.Reporting.WorkerService.Models
         public int Girls { get; set; }
         public int Visitors { get; set; }
         public DateTime CreatedAtUTC { get; set; }
-    }
 
+        public int GetTotal() => Ansar + Khuddam + Itfal + Lajna + Nasrat + Boys + Girls + Visitors;
+    }
 }
 
