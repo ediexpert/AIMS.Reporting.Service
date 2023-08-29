@@ -1,24 +1,10 @@
-﻿using System;
-using AIMS.Dashboards.Data;
+﻿using AIMS.Dashboards.Data;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 namespace AIMS.Reporting.WorkerService
 {
     public class AppDbContext: DbContext
     {
-        //private string _connString;
-        //public AppDbContext(string connString)
-        //{
-        //    _connString = connString;
-        //}
-
-        //protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-        //{
-        //    optionsBuilder.UseMySql(_connString);
-        //}
-
-
         static DbContextOptions<AppDbContext> _options;
         public AppDbContext(DbContextOptions<AppDbContext> options)
             : base(options)
