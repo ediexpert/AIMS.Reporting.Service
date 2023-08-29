@@ -42,7 +42,7 @@ namespace AIMS.Reporting.WorkerService
                 _logger.LogInformation("Worker Reporting service running at: {time}", DateTimeOffset.Now);
                 _nlogger.Info("Worker Reporting service running at: {time}", DateTimeOffset.Now);
 
-                using var scope = _provider.CreateScope();                
+                using var scope = _provider.CreateScope();
                 _dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                 _aimsConnString = _config.GetConnectionString("AIMSConnection");
                 sqlcon = new SqlConnection();
@@ -51,13 +51,22 @@ namespace AIMS.Reporting.WorkerService
                 _logger.LogInformation($"Records count = " + _dbContext.Hazris.Count());
 
                 // fetch data from the AIMSDB and Push data to the DODB
-                _event = _dbContext.Events.FirstOrDefault(x => x.IsActive);
+                _event = _dbContext.Events.Include(x => x.EventSections).FirstOrDefault(x => x.IsActive);
                 Hazri hazri;
                 AttendanceTanzeem attendance;
-                for (int i = 1; i <= 4; i++)
+                foreach (var eventSection in _event.EventSections)
                 {
-                    attendance = GetAttendance((Days)i);
-                    hazri = _dbContext.Hazris.Find(i);
+                    attendance = GetAttendance(eventSection);
+                    hazri = _dbContext.Hazris.FirstOrDefault(x => x.Eventsection == eventSection);
+                    if (hazri == null)
+                    {
+                        hazri = new Hazri();
+                        hazri.Eventsection = eventSection;
+                        hazri.EventId = eventSection.EventId;
+
+                        _dbContext.Hazris.Add(hazri);
+                        _dbContext.SaveChanges();
+                    }
                     hazri.Ansar = attendance.Ansar;
                     hazri.Khuddam = attendance.Khuddam;
                     hazri.Itfal = attendance.Itfal;
@@ -69,34 +78,33 @@ namespace AIMS.Reporting.WorkerService
                     hazri.CreatedAtUTC = DateTime.Now;
 
                     _dbContext.SaveChanges();
-
                 }
 
                 await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
             }
         }
-        private AttendanceTanzeem GetAttendance(Days i)
+
+        private AttendanceTanzeem GetAttendance(EventSection eventSection)
         {
-            SetDates(i);
             AttendanceTanzeem at = new AttendanceTanzeem();
             try
             {
                 // require date in format 2022-08-15 00:00:00
-                string query = $"SELECT count (distinct j.barcode) total, m.tanzeem FROM dbo.members_local m, dbo.attendance_a j where j.barcode = m.barcode AND j.entrytime BETWEEN '{_startDate.ToString("yyyy-MM-dd HH:mm:ss")}' AND '{_endDate.ToString("yyyy-MM-dd HH:mm:ss")}' group by tanzeem ";
+                string query = $"SELECT count (distinct j.barcode) total, m.tanzeem FROM dbo.members_local m, dbo.attendance_a j where j.barcode = m.barcode AND j.entrytime BETWEEN '{eventSection.StartDateTime.ToString("yyyy-MM-dd HH:mm:ss")}' AND '{eventSection.EndDateTime.ToString("yyyy-MM-dd HH:mm:ss")}' group by tanzeem ";
                 _logger.LogInformation($"Fetching data(Local members) from AIMS server....");
                 _logger.LogInformation(query);
                 Execute(query);
-                at.Ansar = Convert.ToInt32( _dbData.FirstOrDefault(x => x.Key == "A").Value);
-                at.Khuddam = Convert.ToInt32( _dbData.FirstOrDefault(x => x.Key == "K").Value);
-                at.Lajna = Convert.ToInt32( _dbData.FirstOrDefault(x => x.Key == "L").Value);
-                at.Itfal = Convert.ToInt32( _dbData.FirstOrDefault(x => x.Key == "T").Value);
-                at.Nasrat = Convert.ToInt32( _dbData.FirstOrDefault(x => x.Key == "N").Value);
-                at.Boys = Convert.ToInt32( _dbData.FirstOrDefault(x => x.Key == "B").Value);
-                at.Girls = Convert.ToInt32( _dbData.FirstOrDefault(x => x.Key == "G").Value);
+                at.Ansar = Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "A").Value);
+                at.Khuddam = Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "K").Value);
+                at.Lajna = Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "L").Value);
+                at.Itfal = Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "T").Value);
+                at.Nasrat = Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "N").Value);
+                at.Boys = Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "B").Value);
+                at.Girls = Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "G").Value);
 
                 // Visitor
 
-                query = query.Replace("dbo.members_local", "dbo.visitors");                
+                query = query.Replace("dbo.members_local", "dbo.visitors");
                 _logger.LogInformation($"Fetching data(Visitors) from AIMS server....");
                 _logger.LogInformation(query);
                 Execute(query);
@@ -116,31 +124,74 @@ namespace AIMS.Reporting.WorkerService
                 _nlogger.Error(exception);
                 throw;
             }
-            
         }
-        private void SetDates(Days i)
-        {            
 
-            switch (i)
-            {
-                case Days.FirstDay:
-                    _startDate = _event.StartDate.Date;
-                    _endDate = _startDate.AddDays(1).AddSeconds(-1);
-                    break;
-                case Days.SecondDay:
-                    _startDate = _event.StartDate.AddDays(1).Date;
-                    _endDate = _startDate.AddDays(1).AddSeconds(-1);
-                    break;
-                case Days.ThirdDay:
-                    _startDate = _event.StartDate.AddDays(2).Date;
-                    _endDate = _startDate.AddDays(1).AddSeconds(-1);
-                    break;
-                default:
-                    _startDate = _event.StartDate.Date;
-                    _endDate = _startDate.AddDays(2).AddSeconds(-1);
-                    break;
-            }
-        }
+        //private AttendanceTanzeem GetAttendance(Days i)
+        //{
+        //    SetDates(i);
+        //    AttendanceTanzeem at = new AttendanceTanzeem();
+        //    try
+        //    {
+        //        // require date in format 2022-08-15 00:00:00
+        //        string query = $"SELECT count (distinct j.barcode) total, m.tanzeem FROM dbo.members_local m, dbo.attendance_a j where j.barcode = m.barcode AND j.entrytime BETWEEN '{_startDate.ToString("yyyy-MM-dd HH:mm:ss")}' AND '{_endDate.ToString("yyyy-MM-dd HH:mm:ss")}' group by tanzeem ";
+        //        _logger.LogInformation($"Fetching data(Local members) from AIMS server....");
+        //        _logger.LogInformation(query);
+        //        Execute(query);
+        //        at.Ansar = Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "A").Value);
+        //        at.Khuddam = Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "K").Value);
+        //        at.Lajna = Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "L").Value);
+        //        at.Itfal = Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "T").Value);
+        //        at.Nasrat = Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "N").Value);
+        //        at.Boys = Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "B").Value);
+        //        at.Girls = Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "G").Value);
+
+        //        // Visitor
+
+        //        query = query.Replace("dbo.members_local", "dbo.visitors");
+        //        _logger.LogInformation($"Fetching data(Visitors) from AIMS server....");
+        //        _logger.LogInformation(query);
+        //        Execute(query);
+        //        at.Ansar += Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "A").Value);
+        //        at.Khuddam += Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "K").Value);
+        //        at.Lajna += Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "L").Value);
+        //        at.Itfal += Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "T").Value);
+        //        at.Nasrat += Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "N").Value);
+        //        at.Boys += Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "B").Value);
+        //        at.Girls += Convert.ToInt32(_dbData.FirstOrDefault(x => x.Key == "G").Value);
+
+        //        return at;
+        //    }
+        //    catch (Exception exception)
+        //    {
+        //        _logger.LogError(exception.Message, exception);
+        //        _nlogger.Error(exception);
+        //        throw;
+        //    }
+
+        //}
+        //private void SetDates(Days i)
+        //{
+
+        //    switch (i)
+        //    {
+        //        case Days.FirstDay:
+        //            _startDate = _event.StartDate.Date;
+        //            _endDate = _startDate.AddDays(1).AddSeconds(-1);
+        //            break;
+        //        case Days.SecondDay:
+        //            _startDate = _event.StartDate.AddDays(1).Date;
+        //            _endDate = _startDate.AddDays(1).AddSeconds(-1);
+        //            break;
+        //        case Days.ThirdDay:
+        //            _startDate = _event.StartDate.AddDays(2).Date;
+        //            _endDate = _startDate.AddDays(1).AddSeconds(-1);
+        //            break;
+        //        default:
+        //            _startDate = _event.StartDate.Date;
+        //            _endDate = _startDate.AddDays(2).AddSeconds(-1);
+        //            break;
+        //    }
+        //}
         private void Execute(string queryString)
         {
             using (SqlConnection connection = new SqlConnection(
