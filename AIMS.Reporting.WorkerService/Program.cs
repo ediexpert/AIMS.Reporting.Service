@@ -21,7 +21,7 @@ namespace AIMS.Reporting.WorkerService
         .ConfigureServices((hostContext, services) =>
         {
             string connString = hostContext.Configuration.GetConnectionString("DefaultConnection");
-            services.AddDbContext<AppDbContext>(options => options.UseMySql(connString));
+            services.AddDbContext<AppDbContext>(options => options.UseMySql(connString, ServerVersion.AutoDetect(connString));
             services.AddHostedService<Worker>();
         });
     }
